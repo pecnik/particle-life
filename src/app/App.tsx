@@ -1,26 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { createRenderer } from "./renderer";
-import { createSimulator } from "./simulator";
+import { createStore } from "./store";
 
+const store = createStore();
 const renderer = createRenderer();
-const simulator = createSimulator({
-    particleColors: renderer.colors.length,
-    particleCount: 32,
-    worldWidth: 256,
-    worldHeight: 256,
-});
 
 export function App() {
     const [container, setContainer] = useState<HTMLDivElement | null>(null);
-
     useEffect(() => {
         let mounted = true;
         container?.appendChild(renderer.canvas);
 
         requestAnimationFrame(function frame() {
             if (mounted) {
-                simulator.update();
-                renderer.render(simulator.particles);
+                renderer.render(store.update());
                 requestAnimationFrame(frame);
             }
         });

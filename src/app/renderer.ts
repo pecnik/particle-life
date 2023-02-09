@@ -1,4 +1,4 @@
-import { Particle } from "./simulator";
+import { Particle } from "./store";
 
 export function createRenderer() {
     const [width, height] = [512, 512];
@@ -24,7 +24,7 @@ export function createRenderer() {
         ctx.fillRect(0, 0, width, height);
 
         particles.forEach((p) => {
-            ctx.fillStyle = colors[p.colorIndex % colors.length];
+            ctx.fillStyle = colors[p.color % colors.length];
             ctx.fillRect(p.position.x, p.position.y, 2, 2);
         });
 
