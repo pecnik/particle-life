@@ -1,0 +1,24 @@
+{
+    "name": "particle-life",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "dev": "parcel ./src/index.html --port 3000",
+        "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "@types/react": "^18.0.27",
+        "@types/react-dom": "^18.0.10",
+        "parcel": "^2.8.3",
+        "prettier": "^2.8.4",
+        "process": "^0.11.10"
+    },
+    "dependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+    }
+}
