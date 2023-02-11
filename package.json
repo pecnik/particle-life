@@ -13,6 +13,7 @@
     "devDependencies": {
         "@types/react": "^18.0.27",
         "@types/react-dom": "^18.0.10",
+        "@types/stats.js": "^0.17.0",
         "@types/three": "^0.149.0",
         "parcel": "^2.8.3",
         "postcss": "^8.4.21",
@@ -23,6 +24,7 @@
     "dependencies": {
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
+        "stats.js": "^0.17.0",
         "three": "^0.149.0"
     }
 }
