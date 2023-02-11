@@ -1,7 +1,7 @@
 import Stats from "stats.js";
 import { Vector2 } from "three";
 
-const PARTICLE_COUNT = 1024 * 4;
+const PARTICLE_COUNT = 1024 * 1;
 const MIN_DIST = 8;
 const MAX_DIST = 24;
 
@@ -17,27 +17,25 @@ const WORLD_SIZE = 512;
 const TILE_SIZE = 32;
 const TILE_MAP_SIZE = Math.ceil(WORLD_SIZE / TILE_SIZE);
 
-{
-    if (TILE_SIZE < MAX_DIST) {
-        throw new Error(`TILE_SIZE smaller than MAX_DIST!`);
-    }
+export function createParticles() {
+    const particles = (() => {
+        const particles = Object.freeze({
+            size: PARTICLE_COUNT,
+            color: new Uint8Array(PARTICLE_COUNT),
+            pos_x: new Float32Array(PARTICLE_COUNT),
+            pos_y: new Float32Array(PARTICLE_COUNT),
+            vel_x: new Float32Array(PARTICLE_COUNT),
+            vel_y: new Float32Array(PARTICLE_COUNT),
+        });
 
-    for (let i = 0; i < COLORS.length; i++) {
-        for (let j = 0; j < COLORS.length; j++) {
-            if (
-                FORCE_MATRIX[i] === undefined ||
-                FORCE_MATRIX[i][j] === undefined
-            ) {
-                throw new Error("FORCE_MATRIX is empty!");
-            }
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            particles.color[i] = Math.floor(Math.random() * COLORS.length);
+            particles.pos_x[i] = Math.random() * WORLD_SIZE;
+            particles.pos_y[i] = Math.random() * WORLD_SIZE;
         }
-    }
-}
 
-main();
-
-function main() {
-    const particles = createParticles();
+        return particles;
+    })();
 
     const tileMap: readonly number[][] = (() => {
         const tileMap = [];
@@ -49,12 +47,13 @@ function main() {
         return tileMap;
     })();
 
+    const dom = document.createElement("div");
     const stats = new Stats();
     const canvas = document.createElement("canvas");
     canvas.width = WORLD_SIZE;
     canvas.height = WORLD_SIZE;
-    document.body.appendChild(canvas);
-    document.body.appendChild(stats.dom);
+    dom.appendChild(canvas);
+    dom.appendChild(stats.dom);
 
     const systems = [
         function attractionSystem() {
@@ -170,54 +169,30 @@ function main() {
                 ctx.fillRect(particles.pos_x[id], particles.pos_y[id], 2, 2);
             }
         },
-
-        // function renderTileMap() {
-        //     const ctx = canvas.getContext("2d")!;
-        //     ctx.fillStyle = "white";
-        //     ctx.strokeStyle = "#222";
-        //     for (let y = 0; y < TILE_MAP_SIZE; y++) {
-        //         for (let x = 0; x < TILE_MAP_SIZE; x++) {
-        //             ctx.strokeRect(
-        //                 x * TILE_SIZE,
-        //                 y * TILE_SIZE,
-        //                 TILE_SIZE,
-        //                 TILE_SIZE,
-        //             );
-
-        //             ctx.fillText(
-        //                 tileMap[y * TILE_MAP_SIZE + x].length.toString(),
-        //                 x * TILE_SIZE,
-        //                 y * TILE_SIZE,
-        //             );
-        //         }
-        //     }
-        // },
     ];
 
-    requestAnimationFrame(function frame() {
+    function update() {
         stats.begin();
         systems.forEach((system) => system());
         stats.end();
-        requestAnimationFrame(frame);
-    });
-}
-
-type Particles = ReturnType<typeof createParticles>;
-function createParticles() {
-    const particles = Object.freeze({
-        size: PARTICLE_COUNT,
-        color: new Uint8Array(PARTICLE_COUNT),
-        pos_x: new Float32Array(PARTICLE_COUNT),
-        pos_y: new Float32Array(PARTICLE_COUNT),
-        vel_x: new Float32Array(PARTICLE_COUNT),
-        vel_y: new Float32Array(PARTICLE_COUNT),
-    });
-
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-        particles.color[i] = Math.floor(Math.random() * COLORS.length);
-        particles.pos_x[i] = Math.random() * WORLD_SIZE;
-        particles.pos_y[i] = Math.random() * WORLD_SIZE;
     }
 
-    return particles;
+    return { dom, update };
+}
+
+{
+    if (TILE_SIZE < MAX_DIST) {
+        throw new Error(`TILE_SIZE smaller than MAX_DIST!`);
+    }
+
+    for (let i = 0; i < COLORS.length; i++) {
+        for (let j = 0; j < COLORS.length; j++) {
+            if (
+                FORCE_MATRIX[i] === undefined ||
+                FORCE_MATRIX[i][j] === undefined
+            ) {
+                throw new Error("FORCE_MATRIX is empty!");
+            }
+        }
+    }
 }
