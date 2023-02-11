@@ -1,7 +1,6 @@
 import Stats from "stats.js";
 import { Vector2 } from "three";
 
-const PARTICLE_COUNT = 1024 * 1;
 const MIN_DIST = 8;
 const MAX_DIST = 24;
 
@@ -17,43 +16,30 @@ const WORLD_SIZE = 512;
 const TILE_SIZE = 32;
 const TILE_MAP_SIZE = Math.ceil(WORLD_SIZE / TILE_SIZE);
 
-export function createParticles() {
-    const particles = (() => {
-        const particles = Object.freeze({
-            size: PARTICLE_COUNT,
-            color: new Uint8Array(PARTICLE_COUNT),
-            pos_x: new Float32Array(PARTICLE_COUNT),
-            pos_y: new Float32Array(PARTICLE_COUNT),
-            vel_x: new Float32Array(PARTICLE_COUNT),
-            vel_y: new Float32Array(PARTICLE_COUNT),
-        });
+export function createParticleLife() {
+    const store = createStore();
 
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-            particles.color[i] = Math.floor(Math.random() * COLORS.length);
-            particles.pos_x[i] = Math.random() * WORLD_SIZE;
-            particles.pos_y[i] = Math.random() * WORLD_SIZE;
-        }
+    let tilemap: number[][] = [];
+    let particles = createParticles(0);
+    store.subscribe((state, prevState) => {
+        if (state.particleCount !== prevState.particleCount) {
+            particles = createParticles(state.particleCount);
 
-        return particles;
-    })();
-
-    const tileMap: readonly number[][] = (() => {
-        const tileMap = [];
-        for (let y = 0; y < TILE_MAP_SIZE; y++) {
-            for (let x = 0; x < TILE_MAP_SIZE; x++) {
-                tileMap[y * TILE_MAP_SIZE + x] = [];
+            tilemap.length = 0;
+            for (let y = 0; y < TILE_MAP_SIZE; y++) {
+                for (let x = 0; x < TILE_MAP_SIZE; x++) {
+                    tilemap[y * TILE_MAP_SIZE + x] = [];
+                }
             }
-        }
-        return tileMap;
-    })();
 
-    const dom = document.createElement("div");
+            console.log(`Update particle count`);
+        }
+    });
+
     const stats = new Stats();
     const canvas = document.createElement("canvas");
     canvas.width = WORLD_SIZE;
     canvas.height = WORLD_SIZE;
-    dom.appendChild(canvas);
-    dom.appendChild(stats.dom);
 
     const systems = [
         function attractionSystem() {
@@ -73,7 +59,7 @@ export function createParticles() {
                         if (x < 0 || y < 0) continue;
                         if (x >= TILE_MAP_SIZE || y >= TILE_MAP_SIZE) continue;
 
-                        const tile = tileMap[y * TILE_MAP_SIZE + x];
+                        const tile = tilemap[y * TILE_MAP_SIZE + x];
                         for (let j = 0; j < tile.length; j++) {
                             const id2 = tile[j];
                             attractParticle(id1, id2);
@@ -145,14 +131,14 @@ export function createParticles() {
         },
 
         function updateTileMap() {
-            for (let i = 0; i < tileMap.length; i++) {
-                tileMap[i].length = 0;
+            for (let i = 0; i < tilemap.length; i++) {
+                tilemap[i].length = 0;
             }
 
             for (let id = 0; id < particles.size; id++) {
                 const x = Math.floor(particles.pos_x[id] / TILE_SIZE);
                 const y = Math.floor(particles.pos_y[id] / TILE_SIZE);
-                tileMap[y * TILE_MAP_SIZE + x].push(id);
+                tilemap[y * TILE_MAP_SIZE + x].push(id);
             }
         },
 
@@ -177,7 +163,12 @@ export function createParticles() {
         stats.end();
     }
 
-    return { dom, update };
+    // Set init conditions
+    store.setState({
+        particleCount: 512,
+    });
+
+    return { store, stats, canvas, update };
 }
 
 {
@@ -195,4 +186,53 @@ export function createParticles() {
             }
         }
     }
+}
+
+interface State {
+    readonly particleCount: number;
+}
+
+function createStore() {
+    let state: State = {
+        particleCount: 0,
+    };
+
+    type Callback = (s: State, ns: State) => void;
+    const subscribers = new Set<Callback>();
+
+    return {
+        snapshot(): State {
+            return state;
+        },
+        subscribe(notify: Callback) {
+            subscribers.add(notify);
+            return () => {
+                subscribers.delete(notify);
+            };
+        },
+        setState(nextState: Partial<State>) {
+            const prevState = state;
+            state = { ...state, ...nextState };
+            subscribers.forEach((notify) => notify(state, prevState));
+        },
+    };
+}
+
+function createParticles(particleCount: number) {
+    const particles = Object.freeze({
+        size: particleCount,
+        color: new Uint8Array(particleCount),
+        pos_x: new Float32Array(particleCount),
+        pos_y: new Float32Array(particleCount),
+        vel_x: new Float32Array(particleCount),
+        vel_y: new Float32Array(particleCount),
+    });
+
+    for (let i = 0; i < particleCount; i++) {
+        particles.color[i] = Math.floor(Math.random() * COLORS.length);
+        particles.pos_x[i] = Math.random() * WORLD_SIZE;
+        particles.pos_y[i] = Math.random() * WORLD_SIZE;
+    }
+
+    return particles;
 }

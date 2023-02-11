@@ -1,14 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { createParticles } from "./particles";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
+import { createParticleLife } from "./particles";
 
-const particles = createParticles();
+const particles = createParticleLife();
 
 export function App() {
     const [container, setContainer] = useState<HTMLDivElement | null>(null);
+    const state = useSyncExternalStore(
+        particles.store.subscribe,
+        particles.store.snapshot,
+    );
 
     useEffect(() => {
         let mounted = true;
-        container?.appendChild(particles.dom);
+        container?.appendChild(particles.canvas);
+        container?.appendChild(particles.stats.dom);
         requestAnimationFrame(function update() {
             if (mounted) {
                 particles.update();
@@ -18,7 +23,8 @@ export function App() {
 
         return () => {
             mounted = false;
-            container?.removeChild(particles.dom);
+            container?.removeChild(particles.canvas);
+            container?.removeChild(particles.stats.dom);
         };
     }, [container]);
 
@@ -28,7 +34,25 @@ export function App() {
                 ref={setContainer}
                 className="flex-1 overflow-auto flex flex-wrap justify-center content-center"
             />
-            <div className="w-80 bg-gray-900">Menu</div>
+
+            {/* Main menu */}
+            <div className="w-80 bg-gray-900">
+                <div className="p-4 flex flex-col">
+                    <label>Particle count</label>
+                    <input
+                        className="w-full"
+                        type="range"
+                        min={32}
+                        max={1024 * 10}
+                        value={state.particleCount}
+                        onChange={(ev) => {
+                            particles.store.setState({
+                                particleCount: ev.target.valueAsNumber,
+                            });
+                        }}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
