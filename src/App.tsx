@@ -23,11 +23,12 @@ export function App() {
     }, [container]);
 
     return (
-        <div>
+        <div className="flex flex-row w-screen h-screen overflow-hidden">
             <div
                 ref={setContainer}
-                className="absolute inset-0 flex flex-wrap justify-center content-center"
+                className="flex-1 overflow-auto flex flex-wrap justify-center content-center"
             />
+            <div className="w-80 bg-gray-900">Menu</div>
         </div>
     );
 }
