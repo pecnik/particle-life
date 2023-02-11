@@ -38,7 +38,7 @@ export function App() {
             {/* Main menu */}
             <div className="w-80 bg-gray-900">
                 <div className="p-4 flex flex-col">
-                    <label>Particle count</label>
+                    <label>Particle count - {state.particleCount}</label>
                     <input
                         className="w-full"
                         type="range"
@@ -48,6 +48,38 @@ export function App() {
                         onChange={(ev) => {
                             particles.store.setState({
                                 particleCount: ev.target.valueAsNumber,
+                            });
+                        }}
+                    />
+                </div>
+
+                <div className="p-4 flex flex-col">
+                    <label>Min distance - {state.minDist}</label>
+                    <input
+                        className="w-full"
+                        type="range"
+                        min={4}
+                        max={32}
+                        value={state.minDist}
+                        onChange={(ev) => {
+                            particles.store.setState({
+                                minDist: ev.target.valueAsNumber,
+                            });
+                        }}
+                    />
+                </div>
+
+                <div className="p-4 flex flex-col">
+                    <label>Max distance - {state.maxDist}</label>
+                    <input
+                        className="w-full"
+                        type="range"
+                        min={state.minDist}
+                        max={64}
+                        value={state.maxDist}
+                        onChange={(ev) => {
+                            particles.store.setState({
+                                maxDist: ev.target.valueAsNumber,
                             });
                         }}
                     />

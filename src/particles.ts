@@ -1,9 +1,6 @@
 import Stats from "stats.js";
 import { Vector2 } from "three";
 
-const MIN_DIST = 8;
-const MAX_DIST = 24;
-
 const COLORS = ["#fff", "#0f0", "#f00"];
 
 const FORCE_MATRIX: number[][] = [
@@ -44,6 +41,7 @@ export function createParticleLife() {
     const systems = [
         function attractionSystem() {
             const vector2D = new Vector2();
+            const { minDist: MIN_DIST, maxDist: MAX_DIST } = store.snapshot();
 
             for (let id1 = 0; id1 < particles.size; id1++) {
                 const tileX = Math.floor(particles.pos_x[id1] / TILE_SIZE);
@@ -152,7 +150,7 @@ export function createParticleLife() {
             const ctx = canvas.getContext("2d")!;
             for (let id = 0; id < particles.size; id++) {
                 ctx.fillStyle = COLORS[particles.color[id]];
-                ctx.fillRect(particles.pos_x[id], particles.pos_y[id], 2, 2);
+                ctx.fillRect(particles.pos_x[id], particles.pos_y[id], 1, 1);
             }
         },
     ];
@@ -165,17 +163,15 @@ export function createParticleLife() {
 
     // Set init conditions
     store.setState({
-        particleCount: 512,
+        particleCount: 1024,
+        minDist: 8,
+        maxDist: 32,
     });
 
     return { store, stats, canvas, update };
 }
 
 {
-    if (TILE_SIZE < MAX_DIST) {
-        throw new Error(`TILE_SIZE smaller than MAX_DIST!`);
-    }
-
     for (let i = 0; i < COLORS.length; i++) {
         for (let j = 0; j < COLORS.length; j++) {
             if (
@@ -190,11 +186,15 @@ export function createParticleLife() {
 
 interface State {
     readonly particleCount: number;
+    readonly minDist: number;
+    readonly maxDist: number;
 }
 
 function createStore() {
     let state: State = {
         particleCount: 0,
+        minDist: 0,
+        maxDist: 0,
     };
 
     type Callback = (s: State, ns: State) => void;
