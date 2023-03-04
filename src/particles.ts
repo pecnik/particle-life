@@ -1,238 +1,202 @@
-import Stats from "stats.js";
 import { Vector2 } from "three";
+import { clamp } from "three/src/math/MathUtils";
 
-const COLORS = ["#fff", "#0f0", "#f00"];
-
-const FORCE_MATRIX: number[][] = [
-    [1, -1, 1],
-    [1, 1, 0.2],
-    [-1, 1, -1],
-    //...
-];
+const MAX_COUNT = 1024;
 const WORLD_SIZE = 512;
-const TILE_SIZE = 32;
-const TILE_MAP_SIZE = Math.ceil(WORLD_SIZE / TILE_SIZE);
+const CELL_SIZE = 16;
 
-export function createParticleLife() {
-    const store = createStore();
+const grid: number[][][] = [];
+for (let y = 0; y < WORLD_SIZE / CELL_SIZE; y++) {
+    grid[y] = [];
+    for (let x = 0; x < WORLD_SIZE / CELL_SIZE; x++) {
+        grid[y][x] = [];
+    }
+}
 
-    let tilemap: number[][] = [];
-    let particles = createParticles(0);
-    store.subscribe((state, prevState) => {
-        if (state.particleCount !== prevState.particleCount) {
-            particles = createParticles(state.particleCount);
+const color_id = new Uint8Array(MAX_COUNT);
+const pos_x = new Float32Array(MAX_COUNT);
+const pos_y = new Float32Array(MAX_COUNT);
+const vel_x = new Float32Array(MAX_COUNT);
+const vel_y = new Float32Array(MAX_COUNT);
 
-            tilemap.length = 0;
-            for (let y = 0; y < TILE_MAP_SIZE; y++) {
-                for (let x = 0; x < TILE_MAP_SIZE; x++) {
-                    tilemap[y * TILE_MAP_SIZE + x] = [];
-                }
+const state = {
+    colors: [] as readonly string[],
+    forces: [] as readonly number[][],
+    particleCount: 0,
+    minDist: 16,
+    maxDist: 32,
+};
+
+const canvas = document.createElement("canvas");
+
+const systems = [
+    function updateGrid() {
+        const cellCount = Math.floor(WORLD_SIZE / CELL_SIZE);
+
+        // Clear gird
+        for (let y = 0; y < grid.length; y++) {
+            for (let x = 0; x < grid[y].length; x++) {
+                grid[y][x].length = 0;
             }
-
-            console.log(`Update particle count`);
         }
-    });
 
-    const stats = new Stats();
-    const canvas = document.createElement("canvas");
-    canvas.width = WORLD_SIZE;
-    canvas.height = WORLD_SIZE;
+        // Populate gird
+        for (let id = 0; id < state.particleCount; id++) {
+            const x = Math.floor(pos_x[id] / CELL_SIZE);
+            const y = Math.floor(pos_y[id] / CELL_SIZE);
 
-    const systems = [
-        function attractionSystem() {
-            const vector2D = new Vector2();
-            const { minDist: MIN_DIST, maxDist: MAX_DIST } = store.snapshot();
+            const r = Math.ceil(state.maxDist / CELL_SIZE);
 
-            for (let id1 = 0; id1 < particles.size; id1++) {
-                const tileX = Math.floor(particles.pos_x[id1] / TILE_SIZE);
-                const tileY = Math.floor(particles.pos_y[id1] / TILE_SIZE);
+            const min_x = Math.max(x - r, 0);
+            const max_x = Math.min(x + r, cellCount - 1);
+            const min_y = Math.max(y - r, 0);
+            const max_y = Math.min(y + r, cellCount - 1);
 
-                particles.vel_x[id1] = 0;
-                particles.vel_y[id1] = 0;
-
-                for (let offsetY = -1; offsetY <= 1; offsetY++) {
-                    for (let offsetX = -1; offsetX <= 1; offsetX++) {
-                        const x = tileX + offsetX;
-                        const y = tileY + offsetY;
-                        if (x < 0 || y < 0) continue;
-                        if (x >= TILE_MAP_SIZE || y >= TILE_MAP_SIZE) continue;
-
-                        const tile = tilemap[y * TILE_MAP_SIZE + x];
-                        for (let j = 0; j < tile.length; j++) {
-                            const id2 = tile[j];
-                            attractParticle(id1, id2);
-                        }
-                    }
+            for (let y = min_y; y < max_y; y++) {
+                for (let x = min_x; x < max_x; x++) {
+                    grid[y][x].push(id);
                 }
-
-                particles.vel_x[id1] *= 0.01;
-                particles.vel_y[id1] *= 0.01;
             }
+        }
+    },
 
-            function attractParticle(id1: number, id2: number) {
-                const x1 = particles.pos_x[id1];
-                const y1 = particles.pos_y[id1];
+    function attractionSystem() {
+        const minDist = state.minDist;
+        const maxDist = state.maxDist;
+        const maxDistSq = state.maxDist ** 2;
 
-                const x2 = particles.pos_x[id2];
-                const y2 = particles.pos_y[id2];
+        const p1 = new Vector2();
+        const p2 = new Vector2();
+        const dir = new Vector2();
 
-                const a = x1 - x2;
-                const b = y1 - y2;
+        for (let id1 = 0; id1 < state.particleCount; id1++) {
+            const x = Math.floor(pos_x[id1] / CELL_SIZE);
+            const y = Math.floor(pos_y[id1] / CELL_SIZE);
 
-                const dist = Math.sqrt(a * a + b * b);
-                if (dist > MAX_DIST) {
+            vel_x[id1] = 0;
+            vel_y[id1] = 0;
+
+            grid[y][x].forEach((id2) => {
+                p1.set(pos_x[id1], pos_y[id1]);
+                p2.set(pos_x[id2], pos_y[id2]);
+                if (p1.distanceToSquared(p2) > maxDistSq) {
                     return;
                 }
 
-                vector2D.x = x2 - x1;
-                vector2D.y = y2 - y1;
-                vector2D.normalize();
+                dir.x = p2.x - p1.x;
+                dir.y = p2.y - p1.y;
+                dir.normalize();
 
-                let force = 1;
-                if (dist < MIN_DIST) {
-                    force = -(1 - dist / MIN_DIST);
-                    force *= 5;
+                const dist = p1.distanceTo(p2);
+                if (dist < minDist) {
+                    dir.multiplyScalar(-(minDist - dist));
                 } else {
-                    const c1 = particles.color[id1];
-                    const c2 = particles.color[id2];
-                    force = (MAX_DIST / dist) * FORCE_MATRIX[c1][c2];
+                    dir.multiplyScalar(maxDist / (maxDist - (dist - minDist)));
                 }
 
-                particles.vel_x[id1] += vector2D.x * force;
-                particles.vel_y[id1] += vector2D.y * force;
-            }
-        },
+                const c1 = color_id[id1];
+                const c2 = color_id[id2];
+                vel_x[id1] += dir.x * state.forces[c1][c2];
+                vel_y[id1] += dir.y * state.forces[c1][c2];
+            });
+        }
+    },
 
-        function applyVelocity() {
-            for (let id = 0; id < particles.size; id++) {
-                particles.pos_x[id] += particles.vel_x[id];
-                particles.pos_y[id] += particles.vel_y[id];
-            }
-        },
+    function applyFriction() {
+        for (let id = 0; id < state.particleCount; id++) {
+            // vel_x[id] *= 0.9;
+            // vel_y[id] *= 0.9;
+        }
+    },
 
-        function wallWarp() {
-            const pad = 1;
+    function applyVelocity() {
+        for (let id = 0; id < state.particleCount; id++) {
+            pos_x[id] += vel_x[id];
+            pos_y[id] += vel_y[id];
 
-            for (let id = 0; id < particles.size; id++) {
-                if (particles.pos_x[id] <= pad) {
-                    particles.pos_x[id] = WORLD_SIZE - pad;
-                } else if (particles.pos_x[id] >= WORLD_SIZE - pad) {
-                    particles.pos_x[id] = pad;
-                }
+            pos_x[id] = clamp(pos_x[id], 0, WORLD_SIZE - 1);
+            pos_y[id] = clamp(pos_y[id], 0, WORLD_SIZE - 1);
+        }
+    },
 
-                if (particles.pos_y[id] <= pad) {
-                    particles.pos_y[id] = WORLD_SIZE - pad;
-                } else if (particles.pos_y[id] >= WORLD_SIZE - pad) {
-                    particles.pos_y[id] = pad;
-                }
-            }
-        },
+    function drawParticles() {
+        const ctx = canvas.getContext("2d")!;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let id = 0; id < state.particleCount; id++) {
+            ctx.fillStyle = state.colors[color_id[id]];
+            ctx.fillRect(pos_x[id], pos_y[id], 4, 4);
+        }
+    },
 
-        function updateTileMap() {
-            for (let i = 0; i < tilemap.length; i++) {
-                tilemap[i].length = 0;
-            }
+    function drawWorldWrap() {
+        const ctx = canvas.getContext("2d")!;
+        const cols = Math.ceil(canvas.width / WORLD_SIZE);
+        const rows = Math.ceil(canvas.height / WORLD_SIZE);
 
-            for (let id = 0; id < particles.size; id++) {
-                const x = Math.floor(particles.pos_x[id] / TILE_SIZE);
-                const y = Math.floor(particles.pos_y[id] / TILE_SIZE);
-                tilemap[y * TILE_MAP_SIZE + x].push(id);
-            }
-        },
+        ctx.globalAlpha = 0.5;
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                if (y === 0 && x === 0) continue;
+                ctx.drawImage(
+                    canvas,
 
-        function clearCanvas() {
-            const ctx = canvas.getContext("2d")!;
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        },
+                    // Frame
+                    0,
+                    0,
+                    WORLD_SIZE,
+                    WORLD_SIZE,
 
-        function renderParticles() {
-            const ctx = canvas.getContext("2d")!;
-            for (let id = 0; id < particles.size; id++) {
-                ctx.fillStyle = COLORS[particles.color[id]];
-                ctx.fillRect(particles.pos_x[id], particles.pos_y[id], 1, 1);
-            }
-        },
-    ];
-
-    function update() {
-        stats.begin();
-        systems.forEach((system) => system());
-        stats.end();
-    }
-
-    // Set init conditions
-    store.setState({
-        particleCount: 1024,
-        minDist: 8,
-        maxDist: 32,
-    });
-
-    return { store, stats, canvas, update };
-}
-
-{
-    for (let i = 0; i < COLORS.length; i++) {
-        for (let j = 0; j < COLORS.length; j++) {
-            if (
-                FORCE_MATRIX[i] === undefined ||
-                FORCE_MATRIX[i][j] === undefined
-            ) {
-                throw new Error("FORCE_MATRIX is empty!");
+                    // Dest
+                    x * WORLD_SIZE,
+                    y * WORLD_SIZE,
+                    WORLD_SIZE,
+                    WORLD_SIZE,
+                );
             }
         }
+        ctx.globalAlpha = 1;
+    },
+];
+
+{
+    document.getElementById("particles")?.appendChild(canvas);
+    window.addEventListener("resize", resize);
+    resize();
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
     }
-}
 
-interface State {
-    readonly particleCount: number;
-    readonly minDist: number;
-    readonly maxDist: number;
-}
-
-function createStore() {
-    let state: State = {
-        particleCount: 0,
-        minDist: 0,
-        maxDist: 0,
-    };
-
-    type Callback = (s: State, ns: State) => void;
-    const subscribers = new Set<Callback>();
-
-    return {
-        snapshot(): State {
-            return state;
-        },
-        subscribe(notify: Callback) {
-            subscribers.add(notify);
-            return () => {
-                subscribers.delete(notify);
-            };
-        },
-        setState(nextState: Partial<State>) {
-            const prevState = state;
-            state = { ...state, ...nextState };
-            subscribers.forEach((notify) => notify(state, prevState));
-        },
-    };
-}
-
-function createParticles(particleCount: number) {
-    const particles = Object.freeze({
-        size: particleCount,
-        color: new Uint8Array(particleCount),
-        pos_x: new Float32Array(particleCount),
-        pos_y: new Float32Array(particleCount),
-        vel_x: new Float32Array(particleCount),
-        vel_y: new Float32Array(particleCount),
+    requestAnimationFrame(function update() {
+        systems.forEach((system) => system());
+        requestAnimationFrame(update);
     });
+}
 
-    for (let i = 0; i < particleCount; i++) {
-        particles.color[i] = Math.floor(Math.random() * COLORS.length);
-        particles.pos_x[i] = Math.random() * WORLD_SIZE;
-        particles.pos_y[i] = Math.random() * WORLD_SIZE;
+export interface ParticleConfig {
+    colors: readonly string[];
+    forces: readonly number[][];
+    particleCount: number;
+    maxDist: number;
+    minDist: number;
+}
+
+export function updateParticleSimulation(props: ParticleConfig) {
+    state.colors = props.colors;
+    state.forces = props.forces;
+    state.maxDist = props.maxDist;
+    state.minDist = props.minDist;
+
+    props.particleCount = Math.min(props.particleCount, MAX_COUNT);
+    if (state.particleCount > props.particleCount) {
+        state.particleCount = props.particleCount;
+    } else {
+        while (state.particleCount < props.particleCount) {
+            color_id[state.particleCount] = Math.random() * state.colors.length;
+            pos_x[state.particleCount] = Math.random() * WORLD_SIZE;
+            pos_y[state.particleCount] = Math.random() * WORLD_SIZE;
+            state.particleCount++;
+        }
     }
-
-    return particles;
 }
