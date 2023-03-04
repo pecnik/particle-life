@@ -1,5 +1,6 @@
 import { Vector2 } from "three";
 import { clamp } from "three/src/math/MathUtils";
+import Stats from "stats.js";
 
 const MAX_COUNT = 100_000;
 const WORLD_SIZE = 512;
@@ -28,6 +29,17 @@ const state = {
 };
 
 const canvas = document.createElement("canvas");
+const stats = new Stats();
+
+document.getElementById("particles")?.appendChild(canvas);
+document.getElementById("particles")?.appendChild(stats.dom);
+window.addEventListener("resize", resize);
+resize();
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
 
 const systems = [
     function updateGrid() {
@@ -159,21 +171,12 @@ const systems = [
     },
 ];
 
-{
-    document.getElementById("particles")?.appendChild(canvas);
-    window.addEventListener("resize", resize);
-    resize();
-
-    function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-    }
-
-    requestAnimationFrame(function update() {
-        systems.forEach((system) => system());
-        requestAnimationFrame(update);
-    });
-}
+requestAnimationFrame(function update() {
+    requestAnimationFrame(update);
+    stats.begin();
+    systems.forEach((system) => system());
+    stats.end();
+});
 
 export interface ParticleConfig {
     colors: readonly string[];
