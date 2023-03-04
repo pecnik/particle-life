@@ -6,10 +6,10 @@ export function App() {
     const [row, setRow] = useState(0);
     const [col, setCol] = useState(0);
 
-    const [minDist, setMinDist] = useState(8);
+    const [particleCount, setParticleCount] = useState(512);
     const [maxDist, setMaxDist] = useState(48);
+    const [minDist, setMinDist] = useState(8);
     const [friction, setFriction] = useState(0.25);
-    const [particleCount, setParticleCount] = useState(64);
 
     useEffect(() => {
         updateParticleSimulation({
@@ -80,24 +80,24 @@ export function App() {
 
             <div className="py-2">
                 <Slider
-                    label="Min distance"
-                    min={1}
-                    max={16}
-                    step={0.001}
-                    value={minDist}
-                    onChange={setMinDist}
-                    labelFraction
-                />
-            </div>
-
-            <div className="py-2">
-                <Slider
                     label="Max distance"
                     min={16}
                     max={128}
                     step={0.001}
                     value={maxDist}
                     onChange={setMaxDist}
+                    labelFraction
+                />
+            </div>
+
+            <div className="py-2">
+                <Slider
+                    label="Min distance"
+                    min={1}
+                    max={16}
+                    step={0.001}
+                    value={minDist}
+                    onChange={setMinDist}
                     labelFraction
                 />
             </div>
