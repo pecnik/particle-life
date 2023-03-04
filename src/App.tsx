@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { updateParticleSimulation } from "./particles";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { getAttractionForce, updateParticleSimulation } from "./particles";
 
 export function App() {
     const colors = useColors();
@@ -34,6 +34,7 @@ export function App() {
                     }}
                 />
             </div>
+
             <div className="py-2">
                 <Slider
                     label="Attraction"
@@ -44,6 +45,25 @@ export function App() {
                     onChange={(value) => colors.setForce(row, col, value)}
                     labelFraction
                 />
+                <ForceGraph
+                    force={colors.getForce(row, col)}
+                    minDist={minDist}
+                    maxDist={maxDist}
+                />
+
+                <button
+                    onClick={colors.randomize}
+                    className={[
+                        "transition-all",
+                        "mt-4 py-1 px-2 text-center",
+                        "w-full",
+                        "rounded",
+                        "text-gray-200 hover:text-gray-100",
+                        "bg-gray-600 hover:bg-gray-500 active:bg-gray-700",
+                    ].join(" ")}
+                >
+                    Randomize
+                </button>
             </div>
 
             <hr className="my-4 border-gray-700" />
@@ -166,21 +186,75 @@ function ColorMatrix({
                         style={{ backgroundColor: color }}
                         className="w-8 h-8 opacity-75"
                     />
-                    {colors.colors.map((color, col) => (
-                        <button
-                            key={color}
-                            onClick={() => onChange(row, col)}
-                            className={
-                                row === selectedRow && col === selectedCol
-                                    ? "w-8 h-8 border border-gray-500 bg-gray-800"
-                                    : "w-8 h-8 bg-gray-800 hover:bg-gray-700"
-                            }
-                        />
-                    ))}
+                    {colors.colors.map((color, col) => {
+                        const force = colors.getForce(row, col);
+                        return (
+                            <button
+                                key={color}
+                                onClick={() => onChange(row, col)}
+                                className={
+                                    row === selectedRow && col === selectedCol
+                                        ? "w-8 h-8 border border-gray-500"
+                                        : "w-8 h-8 border border-gray-700 hover:border-gray-500"
+                                }
+                            >
+                                <div
+                                    className="w-full h-full"
+                                    style={{
+                                        opacity: Math.abs(force).toFixed(2),
+                                        backgroundColor:
+                                            force < 0 ? "red" : "green",
+                                    }}
+                                />
+                            </button>
+                        );
+                    })}
                 </div>
             ))}
         </div>
     );
+}
+
+function ForceGraph({
+    force,
+    minDist,
+    maxDist,
+}: {
+    force: number;
+    minDist: number;
+    maxDist: number;
+}) {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const width = 196;
+    const height = 64;
+
+    useEffect(() => {
+        const ctx = canvasRef.current?.getContext("2d");
+        if (!ctx) return;
+
+        // Clear
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, width, height);
+
+        // X-Axis
+        ctx.strokeStyle = "#fff";
+        ctx.beginPath();
+        ctx.moveTo(0, height / 2);
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+        ctx.closePath();
+
+        // X-Axis
+        ctx.fillStyle = "red";
+
+        for (let x = 0; x < width; x++) {
+            const attr = getAttractionForce(force, x, minDist, maxDist);
+            const y = attr * (height / 2) + height / 2;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }, [canvasRef, force, minDist, maxDist]);
+
+    return <canvas ref={canvasRef} width={width} height={height} />;
 }
 
 function useColors() {
@@ -188,6 +262,7 @@ function useColors() {
         "#EB3B5A",
         "#05C46B",
         "#0FBCF9",
+        "#fbc531",
     ]);
 
     const [forceMatrix, setForceMatrix] = useState<readonly number[]>(() => {
@@ -207,6 +282,12 @@ function useColors() {
             });
         };
 
+        const randomize = () => {
+            setForceMatrix((values) =>
+                values.map(() => (Math.random() - 0.5) * 2),
+            );
+        };
+
         const getMatrix = (): readonly number[][] => {
             const matrix: number[][] = [];
 
@@ -221,6 +302,6 @@ function useColors() {
             return matrix;
         };
 
-        return { colors, getForce, setForce, getMatrix };
+        return { colors, getForce, setForce, getMatrix, randomize };
     }, [colors, forceMatrix]);
 }

@@ -87,25 +87,21 @@ const systems = [
                 dir.y = p2.y - p1.y;
                 dir.normalize();
 
-                const dist = p1.distanceTo(p2);
-                if (dist < minDist) {
-                    dir.multiplyScalar(-(minDist - dist));
-                } else {
-                    dir.multiplyScalar(maxDist / (maxDist - (dist - minDist)));
-                }
-
                 const c1 = color_id[id1];
                 const c2 = color_id[id2];
-                vel_x[id1] += dir.x * state.forces[c1][c2];
-                vel_y[id1] += dir.y * state.forces[c1][c2];
-            });
-        }
-    },
+                const force = getAttractionForce(
+                    state.forces[c1][c2],
+                    p1.distanceTo(p2),
+                    minDist,
+                    maxDist,
+                );
 
-    function applyFriction() {
-        for (let id = 0; id < state.particleCount; id++) {
-            // vel_x[id] *= 0.9;
-            // vel_y[id] *= 0.9;
+                vel_x[id1] += dir.x * force;
+                vel_y[id1] += dir.y * force;
+            });
+
+            vel_x[id1] *= 0.9;
+            vel_y[id1] *= 0.9;
         }
     },
 
@@ -124,7 +120,7 @@ const systems = [
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         for (let id = 0; id < state.particleCount; id++) {
             ctx.fillStyle = state.colors[color_id[id]];
-            ctx.fillRect(pos_x[id], pos_y[id], 4, 4);
+            ctx.fillRect(pos_x[id], pos_y[id], 2, 2);
         }
     },
 
@@ -199,4 +195,27 @@ export function updateParticleSimulation(props: ParticleConfig) {
             state.particleCount++;
         }
     }
+}
+
+export function getAttractionForce(
+    force: number,
+    dist: number,
+    minDist: number,
+    maxDist: number,
+) {
+    if (dist > maxDist) {
+        return 0;
+    }
+
+    if (dist < minDist) {
+        return -(1 - dist / minDist);
+    }
+
+    maxDist -= minDist;
+    dist -= minDist;
+
+    if (dist > maxDist / 2) {
+        return (1 - dist / maxDist) * force * 2;
+    }
+    return (dist / maxDist) * force * 2;
 }
