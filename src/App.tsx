@@ -72,7 +72,7 @@ export function App() {
                 <Slider
                     label="Particle count"
                     min={16}
-                    max={1024}
+                    max={1024 * 4}
                     value={particleCount}
                     onChange={setParticleCount}
                 />

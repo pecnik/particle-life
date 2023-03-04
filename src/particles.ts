@@ -1,7 +1,7 @@
 import { Vector2 } from "three";
 import { clamp } from "three/src/math/MathUtils";
 
-const MAX_COUNT = 1024;
+const MAX_COUNT = 100_000;
 const WORLD_SIZE = 512;
 const CELL_SIZE = 16;
 
@@ -73,6 +73,8 @@ const systems = [
             const x = Math.floor(pos_x[id1] / CELL_SIZE);
             const y = Math.floor(pos_y[id1] / CELL_SIZE);
 
+            let count = 0;
+
             vel_x[id1] = 0;
             vel_y[id1] = 0;
 
@@ -98,10 +100,13 @@ const systems = [
 
                 vel_x[id1] += dir.x * force;
                 vel_y[id1] += dir.y * force;
+                count++;
             });
 
-            vel_x[id1] *= 0.9;
-            vel_y[id1] *= 0.9;
+            if (count > 0) {
+                vel_x[id1] /= count;
+                vel_y[id1] /= count;
+            }
         }
     },
 
