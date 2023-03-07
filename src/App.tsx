@@ -1,28 +1,31 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getAttractionForce, updateParticleSimulation } from "./particles";
+import React, {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from "react";
+import { randFloat } from "three/src/math/MathUtils";
+import {
+    getAttractionForce,
+    MAX_PARTICLE_COUNT,
+    MIN_PARTICLE_COUNT,
+    store,
+} from "./particles";
 
 export function App() {
     const colors = useColors();
     const [row, setRow] = useState(0);
     const [col, setCol] = useState(0);
 
-    const [particleCount, setParticleCount] = useState(512);
-    const [maxDist, setMaxDist] = useState(48);
-    const [minDist, setMinDist] = useState(8);
-    const [friction, setFriction] = useState(0.25);
-
-    useEffect(() => {
-        updateParticleSimulation({
-            particleCount,
-            maxDist,
-            minDist,
-            colors: colors.colors,
-            forces: colors.getMatrix(),
-        });
-    }, [particleCount, minDist, maxDist, colors]);
+    const {
+        particleCount,
+        minAttrDist: minDist,
+        maxAttrDist: maxDist,
+    } = useSyncExternalStore(store.subscribe, store.getState);
 
     return (
-        <div className="absolute top-4 right-4 p-4 border border-gray-600 bg-gray-900">
+        <div className="absolute top-4 right-4 bottom-4 overflow-y-auto p-4 border border-gray-600 bg-gray-900">
             <div className="mb-4">
                 <ColorMatrix
                     colors={colors}
@@ -71,10 +74,12 @@ export function App() {
             <div className="py-2">
                 <Slider
                     label="Particle count"
-                    min={16}
-                    max={1024 * 4}
+                    min={MIN_PARTICLE_COUNT}
+                    max={MAX_PARTICLE_COUNT}
                     value={particleCount}
-                    onChange={setParticleCount}
+                    onChange={(particleCount) => {
+                        store.setState({ particleCount });
+                    }}
                 />
             </div>
 
@@ -85,7 +90,7 @@ export function App() {
                     max={128}
                     step={0.001}
                     value={maxDist}
-                    onChange={setMaxDist}
+                    onChange={(maxAttrDist) => store.setState({ maxAttrDist })}
                     labelFraction
                 />
             </div>
@@ -97,19 +102,7 @@ export function App() {
                     max={16}
                     step={0.001}
                     value={minDist}
-                    onChange={setMinDist}
-                    labelFraction
-                />
-            </div>
-
-            <div className="py-2">
-                <Slider
-                    label="Friction"
-                    min={0}
-                    max={1}
-                    step={0.001}
-                    value={friction}
-                    onChange={setFriction}
+                    onChange={(minAttrDist) => store.setState({ minAttrDist })}
                     labelFraction
                 />
             </div>
@@ -248,9 +241,9 @@ function ForceGraph({
         ctx.fillStyle = "red";
 
         for (let x = 0; x < width; x++) {
-            const attr = getAttractionForce(force, x, minDist, maxDist);
+            const attr = getAttractionForce(x, force, minDist, maxDist);
             const y = attr * (height / 2) + height / 2;
-            ctx.fillRect(x, y, 1, 1);
+            ctx.fillRect(x, y, 4, 4);
         }
     }, [canvasRef, force, minDist, maxDist]);
 
@@ -258,50 +251,32 @@ function ForceGraph({
 }
 
 function useColors() {
-    const [colors] = useState<readonly string[]>([
-        "#EB3B5A",
-        "#05C46B",
-        "#0FBCF9",
-        "#fbc531",
-    ]);
-
-    const [forceMatrix, setForceMatrix] = useState<readonly number[]>(() => {
-        return new Array(colors.length * colors.length).fill(0.5);
-    });
+    const { colors, forces } = useSyncExternalStore(
+        store.subscribe,
+        store.getState,
+    );
 
     return useMemo(() => {
         const getForce = (row: number, col: number) => {
-            return forceMatrix[row * colors.length + col];
+            return forces[row][col];
         };
 
         const setForce = (row: number, col: number, force: number) => {
-            setForceMatrix((values) => {
-                const newValues = [...values];
-                newValues[row * colors.length + col] = force;
-                return newValues;
-            });
+            const newRow = [...forces[row]];
+            newRow[col] = force;
+
+            const newForces = [...forces];
+            newForces[row] = newRow;
+
+            store.setState({ forces: newForces });
         };
 
         const randomize = () => {
-            setForceMatrix((values) =>
-                values.map(() => (Math.random() - 0.5) * 2),
-            );
+            store.setState({
+                forces: forces.map((row) => row.map(() => randFloat(-1, 1))),
+            });
         };
 
-        const getMatrix = (): readonly number[][] => {
-            const matrix: number[][] = [];
-
-            const size = colors.length;
-            for (let row = 0; row < size; row++) {
-                matrix[row] = [];
-                for (let col = 0; col < size; col++) {
-                    matrix[row][col] = forceMatrix[row * size + col];
-                }
-            }
-
-            return matrix;
-        };
-
-        return { colors, getForce, setForce, getMatrix, randomize };
-    }, [colors, forceMatrix]);
+        return { colors, getForce, setForce, randomize };
+    }, [colors, forces]);
 }

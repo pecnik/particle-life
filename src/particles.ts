@@ -1,213 +1,58 @@
-import { Vector2 } from "three";
-import { clamp } from "three/src/math/MathUtils";
 import Stats from "stats.js";
+import { Vector2 } from "three";
+import { clamp, randFloat, randInt } from "three/src/math/MathUtils";
 
-const MAX_COUNT = 100_000;
-const WORLD_SIZE = 512;
-const CELL_SIZE = 16;
+/**
+ * CONSTANTS
+ */
+export const WORLD_MIN = 0;
+export const WORLD_MAX = 512;
+export const WORLD_RANGE = WORLD_MAX - WORLD_MIN;
+export const MAX_COLOR_COUNT = 16;
+export const MIN_PARTICLE_COUNT = 16;
+export const MAX_PARTICLE_COUNT = 4096;
 
-const grid: number[][][] = [];
-for (let y = 0; y < WORLD_SIZE / CELL_SIZE; y++) {
-    grid[y] = [];
-    for (let x = 0; x < WORLD_SIZE / CELL_SIZE; x++) {
-        grid[y][x] = [];
-    }
+/**
+ * STORE
+ */
+export const store = createStore();
+
+/**
+ * PARTICLES
+ */
+const color_id = new Uint8Array(MAX_PARTICLE_COUNT);
+const pos_x = new Float32Array(MAX_PARTICLE_COUNT);
+const pos_y = new Float32Array(MAX_PARTICLE_COUNT);
+const vel_x = new Float32Array(MAX_PARTICLE_COUNT);
+const vel_y = new Float32Array(MAX_PARTICLE_COUNT);
+for (let id = 0; id < MAX_PARTICLE_COUNT; id++) {
+    color_id[id] = randInt(0, store.getState().colors.length - 1);
+    pos_x[id] = randFloat(WORLD_MIN, WORLD_MAX);
+    pos_y[id] = randFloat(WORLD_MIN, WORLD_MAX);
 }
 
-const color_id = new Uint8Array(MAX_COUNT);
-const pos_x = new Float32Array(MAX_COUNT);
-const pos_y = new Float32Array(MAX_COUNT);
-const vel_x = new Float32Array(MAX_COUNT);
-const vel_y = new Float32Array(MAX_COUNT);
-
-const state = {
-    colors: [] as readonly string[],
-    forces: [] as readonly number[][],
-    particleCount: 0,
-    minDist: 16,
-    maxDist: 32,
-};
-
-const canvas = document.createElement("canvas");
-const stats = new Stats();
-
-document.getElementById("particles")?.appendChild(canvas);
-document.getElementById("particles")?.appendChild(stats.dom);
-window.addEventListener("resize", resize);
-resize();
-
-function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+/**
+ * UTILS
+ */
+function worldWrap(val: number) {
+    while (val >= WORLD_MAX) val -= WORLD_RANGE;
+    while (val <= WORLD_MIN) val += WORLD_RANGE;
+    return val;
 }
 
-const systems = [
-    function updateGrid() {
-        const cellCount = Math.floor(WORLD_SIZE / CELL_SIZE);
-
-        // Clear gird
-        for (let y = 0; y < grid.length; y++) {
-            for (let x = 0; x < grid[y].length; x++) {
-                grid[y][x].length = 0;
-            }
-        }
-
-        // Populate gird
-        for (let id = 0; id < state.particleCount; id++) {
-            const x = Math.floor(pos_x[id] / CELL_SIZE);
-            const y = Math.floor(pos_y[id] / CELL_SIZE);
-
-            const r = Math.ceil(state.maxDist / CELL_SIZE);
-
-            const min_x = Math.max(x - r, 0);
-            const max_x = Math.min(x + r, cellCount - 1);
-            const min_y = Math.max(y - r, 0);
-            const max_y = Math.min(y + r, cellCount - 1);
-
-            for (let y = min_y; y < max_y; y++) {
-                for (let x = min_x; x < max_x; x++) {
-                    grid[y][x].push(id);
-                }
-            }
-        }
-    },
-
-    function attractionSystem() {
-        const minDist = state.minDist;
-        const maxDist = state.maxDist;
-        const maxDistSq = state.maxDist ** 2;
-
-        const p1 = new Vector2();
-        const p2 = new Vector2();
-        const dir = new Vector2();
-
-        for (let id1 = 0; id1 < state.particleCount; id1++) {
-            const x = Math.floor(pos_x[id1] / CELL_SIZE);
-            const y = Math.floor(pos_y[id1] / CELL_SIZE);
-
-            let count = 0;
-
-            vel_x[id1] = 0;
-            vel_y[id1] = 0;
-
-            grid[y][x].forEach((id2) => {
-                p1.set(pos_x[id1], pos_y[id1]);
-                p2.set(pos_x[id2], pos_y[id2]);
-                if (p1.distanceToSquared(p2) > maxDistSq) {
-                    return;
-                }
-
-                dir.x = p2.x - p1.x;
-                dir.y = p2.y - p1.y;
-                dir.normalize();
-
-                const c1 = color_id[id1];
-                const c2 = color_id[id2];
-                const force = getAttractionForce(
-                    state.forces[c1][c2],
-                    p1.distanceTo(p2),
-                    minDist,
-                    maxDist,
-                );
-
-                vel_x[id1] += dir.x * force;
-                vel_y[id1] += dir.y * force;
-                count++;
-            });
-
-            if (count > 0) {
-                vel_x[id1] /= count;
-                vel_y[id1] /= count;
-            }
-        }
-    },
-
-    function applyVelocity() {
-        for (let id = 0; id < state.particleCount; id++) {
-            pos_x[id] += vel_x[id];
-            pos_y[id] += vel_y[id];
-
-            pos_x[id] = clamp(pos_x[id], 0, WORLD_SIZE - 1);
-            pos_y[id] = clamp(pos_y[id], 0, WORLD_SIZE - 1);
-        }
-    },
-
-    function drawParticles() {
-        const ctx = canvas.getContext("2d")!;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        for (let id = 0; id < state.particleCount; id++) {
-            ctx.fillStyle = state.colors[color_id[id]];
-            ctx.fillRect(pos_x[id], pos_y[id], 2, 2);
-        }
-    },
-
-    function drawWorldWrap() {
-        const ctx = canvas.getContext("2d")!;
-        const cols = Math.ceil(canvas.width / WORLD_SIZE);
-        const rows = Math.ceil(canvas.height / WORLD_SIZE);
-
-        ctx.globalAlpha = 0.5;
-        for (let y = 0; y < rows; y++) {
-            for (let x = 0; x < cols; x++) {
-                if (y === 0 && x === 0) continue;
-                ctx.drawImage(
-                    canvas,
-
-                    // Frame
-                    0,
-                    0,
-                    WORLD_SIZE,
-                    WORLD_SIZE,
-
-                    // Dest
-                    x * WORLD_SIZE,
-                    y * WORLD_SIZE,
-                    WORLD_SIZE,
-                    WORLD_SIZE,
-                );
-            }
-        }
-        ctx.globalAlpha = 1;
-    },
-];
-
-requestAnimationFrame(function update() {
-    requestAnimationFrame(update);
-    stats.begin();
-    systems.forEach((system) => system());
-    stats.end();
-});
-
-export interface ParticleConfig {
-    colors: readonly string[];
-    forces: readonly number[][];
-    particleCount: number;
-    maxDist: number;
-    minDist: number;
-}
-
-export function updateParticleSimulation(props: ParticleConfig) {
-    state.colors = props.colors;
-    state.forces = props.forces;
-    state.maxDist = props.maxDist;
-    state.minDist = props.minDist;
-
-    props.particleCount = Math.min(props.particleCount, MAX_COUNT);
-    if (state.particleCount > props.particleCount) {
-        state.particleCount = props.particleCount;
+function worldShortDist(a: number, b: number) {
+    const d1 = worldWrap(a - b);
+    const d2 = worldWrap(b - a);
+    if (d1 < d2) {
+        return d1;
     } else {
-        while (state.particleCount < props.particleCount) {
-            color_id[state.particleCount] = Math.random() * state.colors.length;
-            pos_x[state.particleCount] = Math.random() * WORLD_SIZE;
-            pos_y[state.particleCount] = Math.random() * WORLD_SIZE;
-            state.particleCount++;
-        }
+        return -d2;
     }
 }
 
 export function getAttractionForce(
-    force: number,
     dist: number,
+    force: number,
     minDist: number,
     maxDist: number,
 ) {
@@ -223,7 +68,182 @@ export function getAttractionForce(
     dist -= minDist;
 
     if (dist > maxDist / 2) {
-        return (1 - dist / maxDist) * force * 2;
+        return (1 - dist / maxDist) * force;
     }
-    return (dist / maxDist) * force * 2;
+    return (dist / maxDist) * force;
+}
+
+/**
+ * RENDERING
+ */
+const canvas = document.createElement("canvas");
+const stats = new Stats();
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+document.getElementById("particles")?.appendChild(canvas);
+document.getElementById("particles")?.appendChild(stats.dom);
+window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+requestAnimationFrame(function update() {
+    stats.begin();
+    requestAnimationFrame(update);
+
+    const {
+        forces,
+        particleCount,
+        particleRenderSize,
+        maxAttrDist,
+        minAttrDist,
+    } = store.getState();
+
+    // Attraction force
+    const dir = new Vector2();
+    for (let id1 = 0; id1 < particleCount; id1++) {
+        vel_x[id1] = 0;
+        vel_y[id1] = 0;
+
+        for (let id2 = 0; id2 < particleCount; id2++) {
+            if (id1 === id2) continue;
+
+            let dist_x = worldShortDist(pos_x[id1], pos_x[id2]);
+            let dist_y = worldShortDist(pos_y[id1], pos_y[id2]);
+            if (Math.abs(dist_x) > maxAttrDist) continue;
+            if (Math.abs(dist_y) > maxAttrDist) continue;
+
+            dir.x = dist_x;
+            dir.y = dist_y;
+
+            const dist = dir.length();
+
+            const color1 = color_id[id1];
+            const color2 = color_id[id2];
+            const force = getAttractionForce(
+                dist,
+                forces[color1][color2],
+                minAttrDist,
+                maxAttrDist,
+            );
+
+            dir.normalize();
+
+            vel_x[id1] -= dir.x * force;
+            vel_y[id1] -= dir.y * force;
+        }
+    }
+
+    // Apply velocity
+    for (let id = 0; id < particleCount; id++) {
+        pos_x[id] = worldWrap(pos_x[id] + vel_x[id]);
+        pos_y[id] = worldWrap(pos_y[id] + vel_y[id]);
+    }
+
+    // Clear canvas
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw particles
+    const { colors } = store.getState();
+    for (let id = 0; id < particleCount; id++) {
+        ctx.fillStyle = colors[color_id[id]];
+        ctx.fillRect(
+            pos_x[id],
+            pos_y[id],
+            particleRenderSize,
+            particleRenderSize,
+        );
+    }
+
+    {
+        const ctx = canvas.getContext("2d")!;
+        const cols = Math.ceil(canvas.width / WORLD_RANGE);
+        const rows = Math.ceil(canvas.height / WORLD_RANGE);
+
+        ctx.globalAlpha = 1.0;
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                if (y === 0 && x === 0) continue;
+                ctx.drawImage(
+                    canvas,
+
+                    // Frame
+                    0,
+                    0,
+                    WORLD_RANGE,
+                    WORLD_RANGE,
+
+                    // Dest
+                    x * WORLD_RANGE,
+                    y * WORLD_RANGE,
+                    WORLD_RANGE,
+                    WORLD_RANGE,
+                );
+            }
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    stats.end();
+});
+
+interface State {
+    readonly forces: readonly (readonly number[])[];
+    readonly colors: readonly string[];
+    readonly particleCount: number;
+    readonly particleRenderSize: number;
+    readonly maxAttrDist: number;
+    readonly minAttrDist: number;
+}
+
+function createStore() {
+    const subscriptions = new Set<Function>();
+
+    let state: State = {
+        colors: [
+            "#EB3B5A",
+            "#05C46B",
+            "#0FBCF9",
+            "#FBC531",
+            // "#E0FFFF",
+            // "#F0E68C",
+            // "#FFEFD5",
+            // "#ADFF2F",
+        ],
+        forces: initForces(),
+        particleCount: 512,
+        particleRenderSize: 2,
+        maxAttrDist: 32,
+        minAttrDist: 8,
+    };
+
+    function initForces() {
+        const result: number[][] = [];
+        for (let row = 0; row < MAX_COLOR_COUNT; row++) {
+            result[row] = [];
+            for (let col = 0; col < MAX_COLOR_COUNT; col++) {
+                result[row][col] = randFloat(-1, 1);
+            }
+        }
+
+        return result;
+    }
+
+    return {
+        getState() {
+            return state;
+        },
+        setState(newState: Partial<State>) {
+            state = { ...state, ...newState };
+            subscriptions.forEach((notify) => notify());
+            console.log(newState);
+        },
+        subscribe(notify: Function) {
+            subscriptions.add(notify);
+            return () => {
+                subscriptions.delete(notify);
+            };
+        },
+    };
 }
