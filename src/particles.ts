@@ -50,8 +50,8 @@ function worldShortDist(a: number, b: number) {
     }
 }
 
-function clampVelocity(x: number, maxVel = 2.5) {
-    return (x * maxVel) / (x + 5);
+function clampVelocity(x: number, maxVel = 1.0) {
+    return (x * maxVel) / (x + 1);
 }
 
 export function getAttractionForce(
@@ -137,8 +137,14 @@ requestAnimationFrame(function update() {
             vel_y[id1] -= dir.y * force;
         }
 
-        vel_x[id1] = clampVelocity(vel_x[id1]);
-        vel_y[id1] = clampVelocity(vel_y[id1]);
+        dir.x = vel_x[id1];
+        dir.y = vel_y[id1];
+
+        const length = clampVelocity(dir.length());
+        dir.normalize();
+
+        vel_x[id1] = dir.x * length;
+        vel_y[id1] = dir.y * length;
     }
 
     // Apply velocity
