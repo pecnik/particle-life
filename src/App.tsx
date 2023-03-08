@@ -76,6 +76,7 @@ export function App() {
                     label="Particle count"
                     min={MIN_PARTICLE_COUNT}
                     max={MAX_PARTICLE_COUNT}
+                    step={256}
                     value={particleCount}
                     onChange={(particleCount) => {
                         store.setState({ particleCount });

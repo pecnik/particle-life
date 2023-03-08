@@ -9,7 +9,7 @@ export const WORLD_MIN = 0;
 export const WORLD_MAX = 512;
 export const WORLD_RANGE = WORLD_MAX - WORLD_MIN;
 export const MAX_COLOR_COUNT = 16;
-export const MIN_PARTICLE_COUNT = 16;
+export const MIN_PARTICLE_COUNT = 0;
 export const MAX_PARTICLE_COUNT = 4096;
 
 /**
@@ -48,6 +48,10 @@ function worldShortDist(a: number, b: number) {
     } else {
         return -d2;
     }
+}
+
+function clampVelocity(x: number, maxVel = 2.5) {
+    return (x * maxVel) / (x + 5);
 }
 
 export function getAttractionForce(
@@ -132,6 +136,9 @@ requestAnimationFrame(function update() {
             vel_x[id1] -= dir.x * force;
             vel_y[id1] -= dir.y * force;
         }
+
+        vel_x[id1] = clampVelocity(vel_x[id1]);
+        vel_y[id1] = clampVelocity(vel_y[id1]);
     }
 
     // Apply velocity
