@@ -184,8 +184,8 @@ requestAnimationFrame(function update() {
                     // Frame
                     0,
                     0,
-                    WORLD_RANGE,
-                    WORLD_RANGE,
+                    WORLD_RANGE - 1,
+                    WORLD_RANGE - 1,
 
                     // Dest
                     x * WORLD_RANGE,
