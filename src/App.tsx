@@ -5,7 +5,7 @@ import React, {
     useState,
     useSyncExternalStore,
 } from "react";
-import { randFloat } from "three/src/math/MathUtils";
+import { clamp, randFloat } from "three/src/math/MathUtils";
 import {
     getAttractionForce,
     MAX_PARTICLE_COUNT,
@@ -20,8 +20,10 @@ export function App() {
 
     const {
         particleCount,
-        minAttrDist: minDist,
-        maxAttrDist: maxDist,
+        particleRenderSize,
+        minAttrDist,
+        maxAttrDist,
+        // ...
     } = useSyncExternalStore(store.subscribe, store.getState);
 
     return (
@@ -50,23 +52,9 @@ export function App() {
                 />
                 <ForceGraph
                     force={colors.getForce(row, col)}
-                    minDist={minDist}
-                    maxDist={maxDist}
+                    minDist={minAttrDist}
+                    maxDist={maxAttrDist}
                 />
-
-                <button
-                    onClick={colors.randomize}
-                    className={[
-                        "transition-all",
-                        "mt-4 py-1 px-2 text-center",
-                        "w-full",
-                        "rounded",
-                        "text-gray-200 hover:text-gray-100",
-                        "bg-gray-600 hover:bg-gray-500 active:bg-gray-700",
-                    ].join(" ")}
-                >
-                    Randomize
-                </button>
             </div>
 
             <hr className="my-4 border-gray-700" />
@@ -76,7 +64,7 @@ export function App() {
                     label="Particle count"
                     min={MIN_PARTICLE_COUNT}
                     max={MAX_PARTICLE_COUNT}
-                    step={256}
+                    step={128}
                     value={particleCount}
                     onChange={(particleCount) => {
                         store.setState({ particleCount });
@@ -90,7 +78,7 @@ export function App() {
                     min={16}
                     max={128}
                     step={0.001}
-                    value={maxDist}
+                    value={maxAttrDist}
                     onChange={(maxAttrDist) => store.setState({ maxAttrDist })}
                     labelFraction
                 />
@@ -102,8 +90,22 @@ export function App() {
                     min={1}
                     max={16}
                     step={0.001}
-                    value={minDist}
+                    value={minAttrDist}
                     onChange={(minAttrDist) => store.setState({ minAttrDist })}
+                    labelFraction
+                />
+            </div>
+
+            <div className="py-2">
+                <Slider
+                    label="Particle render size"
+                    min={1}
+                    max={4}
+                    step={1}
+                    value={particleRenderSize}
+                    onChange={(particleRenderSize) =>
+                        store.setState({ particleRenderSize })
+                    }
                     labelFraction
                 />
             </div>
@@ -160,26 +162,41 @@ function ColorMatrix({
     selectedCol?: number;
     onChange?: (row: number, col: number) => void;
 }) {
+    const colorCell = (color: string) => (
+        <div
+            key={color}
+            style={{ backgroundColor: color }}
+            className="w-6 h-6 rounded"
+        />
+    );
+
+    const forceCellColor = (force: number) => {
+        const toHex = (value: number) => {
+            value = Math.floor(value * 255);
+            value = clamp(value, 0, 255);
+            return value.toString(16).padStart(2, "00");
+        };
+        const R = toHex(-force);
+        const G = toHex(force);
+        const B = toHex(0.1);
+
+        return {
+            backgroundColor: `#${R}${G}${B}`,
+        };
+    };
+
     return (
         <div className="flex flex-col gap-1">
             {/* Header */}
             <div className="flex flex-row gap-1">
-                <div className="w-8 h-8" />
-                {colors.colors.map((color) => (
-                    <div
-                        key={color}
-                        style={{ backgroundColor: color }}
-                        className="w-8 h-8 opacity-75"
-                    />
-                ))}
+                <div className="w-6 h-6 rounded" />
+                {colors.colors.map(colorCell)}
             </div>
+
+            {/* Colors */}
             {colors.colors.map((color, row) => (
-                <div key={color} className="h-8 flex flex-row gap-1">
-                    <div
-                        key={color}
-                        style={{ backgroundColor: color }}
-                        className="w-8 h-8 opacity-75"
-                    />
+                <div key={color} className="h-6 flex flex-row gap-1">
+                    {colorCell(color)}
                     {colors.colors.map((color, col) => {
                         const force = colors.getForce(row, col);
                         return (
@@ -188,23 +205,57 @@ function ColorMatrix({
                                 onClick={() => onChange(row, col)}
                                 className={
                                     row === selectedRow && col === selectedCol
-                                        ? "w-8 h-8 border border-gray-500"
-                                        : "w-8 h-8 border border-gray-700 hover:border-gray-500"
+                                        ? "w-6 h-6 outline outline-1 outline-gray-400"
+                                        : "w-6 h-6"
                                 }
                             >
                                 <div
                                     className="w-full h-full"
-                                    style={{
-                                        opacity: Math.abs(force).toFixed(2),
-                                        backgroundColor:
-                                            force < 0 ? "red" : "green",
-                                    }}
+                                    style={forceCellColor(force)}
                                 />
                             </button>
                         );
                     })}
+
+                    <button
+                        title="Remove color"
+                        className="w-6 h-6"
+                        onClick={() => colors.removeColor(row)}
+                    >
+                        ❌
+                    </button>
                 </div>
             ))}
+
+            {/* Add color */}
+            <button
+                onClick={colors.addColor}
+                className={[
+                    "transition-all",
+                    "mt-4 py-1 px-2 text-center",
+                    "w-full",
+                    "rounded",
+                    "text-gray-200 hover:text-gray-100",
+                    "bg-gray-600 hover:bg-gray-500 active:bg-gray-700",
+                ].join(" ")}
+            >
+                Add color
+            </button>
+
+            {/* Randomize */}
+            <button
+                onClick={colors.randomize}
+                className={[
+                    "transition-all",
+                    "mt-4 py-1 px-2 text-center",
+                    "w-full",
+                    "rounded",
+                    "text-gray-200 hover:text-gray-100",
+                    "bg-gray-600 hover:bg-gray-500 active:bg-gray-700",
+                ].join(" ")}
+            >
+                Randomize
+            </button>
         </div>
     );
 }
@@ -231,7 +282,8 @@ function ForceGraph({
         ctx.fillRect(0, 0, width, height);
 
         // X-Axis
-        ctx.strokeStyle = "#fff";
+        ctx.strokeStyle = "#666";
+        ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(0, height / 2);
         ctx.lineTo(width, height / 2);
@@ -239,13 +291,16 @@ function ForceGraph({
         ctx.closePath();
 
         // X-Axis
-        ctx.fillStyle = "red";
-
+        ctx.strokeStyle = "#ffff";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
         for (let x = 0; x < width; x++) {
-            const attr = getAttractionForce(x, force, minDist, maxDist);
+            const attr = -getAttractionForce(x, force, minDist, maxDist);
             const y = attr * (height / 2) + height / 2;
-            ctx.fillRect(x, y, 4, 4);
+            ctx.lineTo(x, y);
         }
+        ctx.stroke();
+        ctx.closePath();
     }, [canvasRef, force, minDist, maxDist]);
 
     return <canvas ref={canvasRef} width={width} height={height} />;
@@ -278,6 +333,56 @@ function useColors() {
             });
         };
 
-        return { colors, getForce, setForce, randomize };
+        const addColor = () => {
+            const COLOR_LIST = [
+                "#EB3B5A",
+                "#05C46B",
+                "#0FBCF9",
+                "#FBC531",
+                "#7158e2",
+                "#fff200",
+                "#ffb8b8",
+                "#ADFF2F",
+                "#D6A2E8",
+            ];
+
+            const nextColor = COLOR_LIST.find((color) => {
+                return !colors.includes(color);
+            });
+
+            if (nextColor === undefined) {
+                return;
+            }
+
+            const newColors = [...colors];
+            newColors.push(nextColor);
+
+            const newForces = forces.map((row) => {
+                const newRow = [...row];
+                newRow.push(randFloat(-1, 1));
+                return newRow;
+            });
+            newForces.push(newColors.map(() => randFloat(-1, 1)));
+
+            store.setState({ colors: newColors, forces: newForces });
+            store.resetParticles();
+        };
+
+        const removeColor = (colorId: number) => {
+            const newColors = [...colors];
+            newColors.splice(colorId, 1);
+
+            const newForces = forces.map((row) => {
+                const newRow = [...row];
+                newRow.splice(colorId, 1);
+                return newRow;
+            });
+            newForces.splice(colorId, 1);
+
+            store.setState({ colors: newColors, forces: newForces });
+            store.resetParticles();
+        };
+
+        return { colors, getForce, setForce, addColor, removeColor, randomize };
     }, [colors, forces]);
 }

@@ -1,12 +1,12 @@
 import Stats from "stats.js";
 import { Vector2 } from "three";
-import { clamp, randFloat, randInt } from "three/src/math/MathUtils";
+import { randFloat, randInt } from "three/src/math/MathUtils";
 
 /**
  * CONSTANTS
  */
 export const WORLD_MIN = 0;
-export const WORLD_MAX = 512;
+export const WORLD_MAX = 1024;
 export const WORLD_RANGE = WORLD_MAX - WORLD_MIN;
 export const MAX_COLOR_COUNT = 16;
 export const MIN_PARTICLE_COUNT = 0;
@@ -20,6 +20,7 @@ export const store = createStore();
 /**
  * PARTICLES
  */
+const gridMap = createGridMap();
 const color_id = new Uint8Array(MAX_PARTICLE_COUNT);
 const pos_x = new Float32Array(MAX_PARTICLE_COUNT);
 const pos_y = new Float32Array(MAX_PARTICLE_COUNT);
@@ -36,7 +37,7 @@ for (let id = 0; id < MAX_PARTICLE_COUNT; id++) {
  */
 function worldWrap(val: number) {
     while (val >= WORLD_MAX) val -= WORLD_RANGE;
-    while (val <= WORLD_MIN) val += WORLD_RANGE;
+    while (val < WORLD_MIN) val += WORLD_RANGE;
     return val;
 }
 
@@ -93,7 +94,6 @@ window.addEventListener("resize", () => {
 
 requestAnimationFrame(function update() {
     stats.begin();
-    requestAnimationFrame(update);
 
     const {
         forces,
@@ -103,13 +103,21 @@ requestAnimationFrame(function update() {
         minAttrDist,
     } = store.getState();
 
+    // Update grid
+    gridMap.clear();
+    for (let id = 0; id < particleCount; id++) {
+        gridMap.push(id, pos_x[id], pos_y[id], maxAttrDist);
+    }
+
     // Attraction force
     const dir = new Vector2();
     for (let id1 = 0; id1 < particleCount; id1++) {
         vel_x[id1] = 0;
         vel_y[id1] = 0;
 
-        for (let id2 = 0; id2 < particleCount; id2++) {
+        const query = gridMap.query(pos_x[id1], pos_y[id1]);
+        for (let i = 0; i < query.length; i++) {
+            const id2 = query[i];
             if (id1 === id2) continue;
 
             let dist_x = worldShortDist(pos_x[id1], pos_x[id2]);
@@ -182,10 +190,10 @@ requestAnimationFrame(function update() {
                     canvas,
 
                     // Frame
-                    0,
-                    0,
-                    WORLD_RANGE - 1,
-                    WORLD_RANGE - 1,
+                    1,
+                    1,
+                    WORLD_RANGE - 2,
+                    WORLD_RANGE - 2,
 
                     // Dest
                     x * WORLD_RANGE,
@@ -198,6 +206,7 @@ requestAnimationFrame(function update() {
         ctx.globalAlpha = 1;
     }
 
+    requestAnimationFrame(update);
     stats.end();
 });
 
@@ -214,18 +223,9 @@ function createStore() {
     const subscriptions = new Set<Function>();
 
     let state: State = {
-        colors: [
-            "#EB3B5A",
-            "#05C46B",
-            "#0FBCF9",
-            "#FBC531",
-            // "#E0FFFF",
-            // "#F0E68C",
-            // "#FFEFD5",
-            // "#ADFF2F",
-        ],
+        colors: ["#EB3B5A", "#05C46B", "#0FBCF9", "#FBC531"],
         forces: initForces(),
-        particleCount: 512,
+        particleCount: 2048,
         particleRenderSize: 2,
         maxAttrDist: 32,
         minAttrDist: 8,
@@ -250,13 +250,63 @@ function createStore() {
         setState(newState: Partial<State>) {
             state = { ...state, ...newState };
             subscriptions.forEach((notify) => notify());
-            console.log(newState);
         },
         subscribe(notify: Function) {
             subscriptions.add(notify);
             return () => {
                 subscriptions.delete(notify);
             };
+        },
+        resetParticles() {
+            for (let id = 0; id < MAX_PARTICLE_COUNT; id++) {
+                color_id[id] = randInt(0, store.getState().colors.length - 1);
+                pos_x[id] = randFloat(WORLD_MIN, WORLD_MAX);
+                pos_y[id] = randFloat(WORLD_MIN, WORLD_MAX);
+            }
+        },
+    };
+}
+
+function createGridMap() {
+    const TILE = 64;
+    const ROWS = Math.ceil(WORLD_RANGE / TILE) + 1;
+
+    const cache: number[][][] = [];
+    for (let y = 0; y < ROWS; y++) {
+        cache[y] = [];
+        for (let x = 0; x < ROWS; x++) {
+            cache[y][x] = [];
+        }
+    }
+
+    function warp(val: number) {
+        while (val >= ROWS) val -= ROWS;
+        while (val < 0) val += ROWS;
+        return val;
+    }
+
+    return {
+        clear() {
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < ROWS; x++) {
+                    cache[y][x].length = 0;
+                }
+            }
+        },
+        push(id: number, px: number, py: number, maxDist: number) {
+            const range = Math.ceil(maxDist / TILE);
+            for (let row = -range; row <= range; row++) {
+                for (let col = -range; col <= range; col++) {
+                    const x = warp(Math.round(px / TILE) + col);
+                    const y = warp(Math.round(py / TILE) + row);
+                    cache[y][x].push(id);
+                }
+            }
+        },
+        query(x: number, y: number): number[] {
+            x = Math.round(x / TILE);
+            y = Math.round(y / TILE);
+            return cache[y][x];
         },
     };
 }
