@@ -1,6 +1,7 @@
 import Stats from "stats.js";
 import { Vector2 } from "three";
 import { randFloat, randInt } from "three/src/math/MathUtils";
+import { storage } from "./storage";
 
 /**
  * CONSTANTS
@@ -170,41 +171,38 @@ requestAnimationFrame(function update() {
     for (let id = 0; id < particleCount; id++) {
         ctx.fillStyle = colors[color_id[id]];
         ctx.fillRect(
-            pos_x[id],
-            pos_y[id],
+            pos_x[id] - particleRenderSize / 2,
+            pos_y[id] - particleRenderSize / 2,
             particleRenderSize,
             particleRenderSize,
         );
     }
 
-    {
-        const ctx = canvas.getContext("2d")!;
-        const cols = Math.ceil(canvas.width / WORLD_RANGE);
-        const rows = Math.ceil(canvas.height / WORLD_RANGE);
+    // Draw screen wrap
+    const cols = Math.ceil(canvas.width / WORLD_RANGE);
+    const rows = Math.ceil(canvas.height / WORLD_RANGE);
+    ctx.globalAlpha = 1.0;
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            if (y === 0 && x === 0) continue;
+            ctx.drawImage(
+                canvas,
 
-        ctx.globalAlpha = 1.0;
-        for (let y = 0; y < rows; y++) {
-            for (let x = 0; x < cols; x++) {
-                if (y === 0 && x === 0) continue;
-                ctx.drawImage(
-                    canvas,
+                // Frame
+                1,
+                1,
+                WORLD_RANGE - 2,
+                WORLD_RANGE - 2,
 
-                    // Frame
-                    1,
-                    1,
-                    WORLD_RANGE - 2,
-                    WORLD_RANGE - 2,
-
-                    // Dest
-                    x * WORLD_RANGE,
-                    y * WORLD_RANGE,
-                    WORLD_RANGE,
-                    WORLD_RANGE,
-                );
-            }
+                // Dest
+                x * WORLD_RANGE,
+                y * WORLD_RANGE,
+                WORLD_RANGE,
+                WORLD_RANGE,
+            );
         }
-        ctx.globalAlpha = 1;
     }
+    ctx.globalAlpha = 1;
 
     requestAnimationFrame(update);
     stats.end();
@@ -221,7 +219,6 @@ interface State {
 
 function createStore() {
     const subscriptions = new Set<Function>();
-
     let state: State = {
         colors: ["#EB3B5A", "#05C46B", "#0FBCF9", "#FBC531"],
         forces: initForces(),
@@ -243,6 +240,12 @@ function createStore() {
         return result;
     }
 
+    try {
+        const json = storage.getItem("particle-store/state");
+        const data = JSON.parse(json || "{}");
+        state = { ...state, ...data };
+    } catch (e) {}
+
     return {
         getState() {
             return state;
@@ -250,6 +253,7 @@ function createStore() {
         setState(newState: Partial<State>) {
             state = { ...state, ...newState };
             subscriptions.forEach((notify) => notify());
+            storage.setItem("particle-store/state", JSON.stringify(state));
         },
         subscribe(notify: Function) {
             subscriptions.add(notify);
